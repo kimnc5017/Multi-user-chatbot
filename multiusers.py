@@ -23,9 +23,42 @@ from supabase import Client, create_client
 # ---------------------------------------------------------------------------
 # Paths & environment
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).resolve().parents[2]
+CODE_DIR = Path(__file__).resolve().parent
+
+
+def _resolve_repo_root() -> Path:
+    """로컬(monorepo) / Streamlit Cloud(단일 repo) 모두에서 루트 추정."""
+    candidates = [CODE_DIR, CODE_DIR.parent]
+    if len(CODE_DIR.parents) >= 2:
+        candidates.append(CODE_DIR.parents[1])
+    if len(CODE_DIR.parents) >= 3:
+        candidates.append(CODE_DIR.parents[2])
+    for d in candidates:
+        if (d / ".env").is_file():
+            return d
+    return CODE_DIR.parents[2] if len(CODE_DIR.parents) > 2 else CODE_DIR
+
+
+def resolve_logo_path() -> Path | None:
+    """logo.* — 스크립트 옆·상위·monorepo 루트 순으로 탐색."""
+    names = ("logo.png", "logo.jpg", "logo.jpeg", "logo.webp", "Logo.png")
+    search_dirs: list[Path] = []
+    seen: set[Path] = set()
+    for d in (CODE_DIR, CODE_DIR.parent, *CODE_DIR.parents[:3]):
+        resolved = d.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            search_dirs.append(resolved)
+    for directory in search_dirs:
+        for name in names:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+REPO_ROOT = _resolve_repo_root()
 ENV_PATH = REPO_ROOT / ".env"
-LOGO_PATH = REPO_ROOT / "logo.png"
 LOG_DIR = REPO_ROOT / "logs"
 
 load_dotenv(dotenv_path=ENV_PATH)
@@ -775,8 +808,9 @@ motion div.stButton > button {
 
     c1, c2, c3 = st.columns([1, 4, 1])
     with c1:
-        if LOGO_PATH.is_file():
-            st.image(str(LOGO_PATH), width=180)
+        logo_path = resolve_logo_path()
+        if logo_path:
+            st.image(str(logo_path), width=180)
         else:
             st.markdown("### 📚")
     with c2:
